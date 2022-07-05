@@ -1,0 +1,965 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Timeline</title>
+</head>
+
+<!-- Not allowed to be in a separate file, because then trying to use Stylesheet.cssrules will give a security exception (maybe due to cross origin policies issues.) As per https://developer.mozilla.org/en-US/docs/Web/API/CSSStyleSheet-->
+<style>
+    :root {
+        --tick-width: 3vw;
+    }
+
+    .timeline {
+        position: relative;
+        /*height: 100%;*/
+    }
+
+    .timeline::after {
+        content: "";
+        top: 0;
+
+        height: 100%;
+        left: 0;
+        right: 0;
+        z-index: -2;
+    }
+
+    .timeline-slider-output {
+        overflow: hidden;
+        margin-bottom: 35px;
+        background-color: #EEEEEE;
+        user-select: none;
+        -moz-user-select: none;
+        display: flex;
+        height: 50vh;
+    }
+
+    .timeline-slider {
+        position: relative;
+        white-space: nowrap;
+        /*padding-top: 10vh;*/
+        padding-bottom: 5vh;
+        /*will-change: transform;*/
+        display: flex;
+        flex-direction: column;
+        justify-content: flex-end;
+    }
+
+    .timeline-slider-nav {
+        flex-direction: row;
+        background-color: #FFF;
+        height: 5vh;
+        max-height: 5vh;
+        position: relative;
+        margin: 0 3vh;
+        justify-content: center;
+        align-items: flex-end;
+        padding: 0 20vw 0 10vw;
+    }
+
+    .minor-tick {
+        font-size: 1.5vh;
+        color: #777;
+        text-align: center;
+        font-weight: normal;
+        position: relative;
+        display: inline-flex;
+        flex-direction: row;
+        align-items: flex-end;
+        box-sizing: border-box;
+        bottom: 15%;
+        width: var(--tick-width);
+        height: 100%;
+    }
+
+    .timeline-marker-line {
+        box-sizing: border-box;
+        /*border-left: 0.1vw solid #777;*/
+        display: flex;
+        flex-direction: column;
+        position: absolute;
+        content : " ";
+        /*Include the height of the button that will come over it.*/
+        height: 200%;
+        /* Ticks are offset 10% from top of navbar, so 90% from bot gets us right to top.*/
+        top: -185%;
+        /*top: 15%;*/
+        margin: 0 auto;
+        visibility: visible;
+        will-change: top,height;
+    }
+
+    /*.timeline-marker-line:hover .timeline-marker-line:focus .timeline-marker-line.active {*/
+    /*color: red;*/
+    /*!*font-size: 3em;*!*/
+    /*background-color: #999;*/
+    /*}*/
+
+    .timeline-marker-line-left {
+        height: 100%;
+        border-left: 0.1vw solid #555;
+        position: absolute;
+        width: 0;
+        left: -1px;
+        bottom: 0;
+    }
+
+    .timeline-marker-line-both {
+        height: 100%;
+        border-right: 0.1vw solid #555;
+        border-left: 0.1vw solid #555;
+        position: absolute;
+        width: 0;
+        left: -1px;
+        bottom: 0;
+    }
+
+
+
+    .timeline-markerTextContainer {
+        border-top-left-radius: 3%;
+        border-top-right-radius: 3%;
+        border-bottom-right-radius: 3%;
+        border: 2px solid #444;
+
+        background-color: #CCC;
+        z-index: 1;
+        display: flex;
+
+        /*height: 50%;*/
+        /*width: 125%;*/
+        min-width: 5vw;
+
+        /*width: 100px;*/
+        /*padding-right: 10px;*/
+        position: relative;
+        vertical-align: top;
+        /*Gets rid of black line protruding*/
+        /*top: -2%;*/
+        left: -0.1vw;
+        /*To do a background image, have to do this in new div with opacity*/
+        /*background-image: url('url');*/
+        /*background-size: 100%;*/
+    }
+
+    /*periods should not have a max-width*/
+    .timeline-markerTextContainerNonPeriod {
+        max-width: 10vw;
+    }
+
+    .timeline-markerTextContainer:hover , .timeline-markerTextContainer:focus {
+        /*transform: scale(1.2, 1);*/
+        /*transition-timing-function: cubic-bezier(0.77, 0, 0.175, 1);*/
+        /*transition-duration: 0.5s, 0.5s;*/
+        /*transition-property: transform;*/
+        /*transform-origin: left center;*/
+        /*Keeps the button aligned with the marker line when expanding*/
+        /*left: -0.12vw;*/
+        /*top: -4%;*/
+        z-index: 2;
+        background-color: #999;
+        /*Overrides the max-width set to layout the element*/
+        width: initial;
+        max-width: initial !important;
+        padding-right: 1em;
+        min-width: 10vw;
+    }
+
+    .timeline-markerTextContainer.active {
+        z-index: 2;
+        background-color: #999;
+        width: initial;
+        max-width: initial !important;
+        padding-right: 1em;
+        min-width: 10vw;
+    }
+
+    .timeline-markerTextContainer.active + .timeline-marker-line-both{
+        /*z-index: 2;*/
+        background-color: #BBB;
+        z-index: -1;
+    }
+
+    .time-period {
+        position: relative;
+        cursor: pointer;
+        top: 0.1vh;
+        width: 0;
+        height: 0;
+        border-top: 1vh solid transparent;
+        border-bottom: 1vh solid transparent;
+
+        border-left: 1vw solid Gray;
+    }
+
+    .time-period-container{
+        cursor: pointer;
+    }
+
+    .marker-text {
+        /*text-align : right;*/
+        /*line-height: 3vh;*/
+        font-size: 1em;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        color : #444; /* 444 */
+        white-space: nowrap;
+        /*max-width: 125px;*/
+        /*width: 50px;*/
+        /*height: 50px;*/
+        margin: 0.3vh 0;
+    }
+
+    .timeline--article-output {
+        /*position: relative;*/
+        /*display: flex;*/
+    }
+
+    .article--outer {
+        /*position: absolute;*/
+    }
+
+    .timeline article {
+        position: absolute;
+        top: 0;
+        /*opacity: 0;*/
+        transition: all 300ms cubic-bezier(0.65, 0.05, 0.14, 1);
+        white-space: normal;
+        vertical-align: top;
+        /*will-change: opacity, transform;*/
+        color: #555;
+        background-color: #FFF;
+        display: none;
+    }
+    .timeline article.active {
+        /*opacity: 1;*/
+        display: block;
+    }
+
+    .article--inner {
+
+    }
+
+    .timeline--img {
+        width: 100%;
+    }
+
+    .timeline img {
+        min-width: 100%;
+        max-width: 100%;
+        margin-bottom: 15px;
+    }
+
+
+    .timeline--content {
+        /*max-width: 500px;*/
+    }
+
+    .menu-bar{
+        position: fixed;
+        background-color : #FFF;
+        width: 100%;
+        z-index: 2;
+        top: 0;
+        display: flex;
+        /*justify-content: center;*/
+        justify-content: space-evenly;
+    }
+
+    .form-output{
+        /*width: 50%;*/
+        /*margin: 0 auto;*/
+        /*height : 50px;*/
+        display: flex;
+        /*flex-direction: row;*/
+        justify-content: center;
+        /*align-items: center;*/
+        font-size: 2.5vh;
+        padding-bottom: 0.5vh;
+    }
+
+    .navigation-back-button{
+        cursor: pointer;
+        /*position: relative;*/
+        height: 2vw;
+        width: 2vw;
+        justify-content: right;
+        /*top: 0;*/
+        /*left: 0;*/
+    }
+
+    .year-form{
+        position: relative;
+    }
+
+    .goto-submit-button{
+        position: relative;
+        cursor: pointer;
+        width: 1.5vw;
+        height: 1.5vw;
+        vertical-align: bottom;
+        padding-left: 0.5vw;
+        margin-right: 3vw;
+        top: 0.7vh;
+    }
+
+    .navigation-zoom-in{
+        position: relative;
+        cursor: pointer;
+        /*line-height: 0;*/
+        /*font-size: 0;*/
+        width: 2vw;
+        height: 2vw;
+        margin-right: 0.5vw;
+        /*display: block;*/
+        top: 0.3vh;
+    }
+
+    .navigation-zoom-out{
+        position: relative;
+        cursor: pointer;
+        top: 0.3vh;
+        /*display: block;*/
+        width: 2vw;
+        height: 2vw;
+    }
+
+    .navigation-forward-button{
+        cursor: pointer;
+        /*position: relative;*/
+        height: 2vw;
+        width: 2vw;
+        float: right;
+        /*left: 50px;*/
+    }
+    /*.no-flexbox .timeline--content {
+        float: left;
+    }*/
+
+    /*@media screen and (min-width: 768px) {*/
+
+    /*.timeline--img {*/
+    /*padding-right: 30px;*/
+    /*width: inherit;*/
+    /*}*/
+    /*!*.timeline button {*!*/
+    /*!*margin-right: 60px;*!*/
+    /*!*}*!*/
+
+    /*.no-flexbox .timeline-slider--img, .no-flexbox .timeline-slider--content {*/
+    /*width: 50%;*/
+    /*float: left;*/
+    /*}*/
+    /*}*/
+    /*@media screen and (min-width: 1025px) {*/
+    /*.timeline--img {*/
+    /*width: initial;*/
+    /*}*/
+
+    /*}*/
+
+
+</style>
+
+<!--<link rel="stylesheet" href="timeline_style.css" title="external style sheet">-->
+<body>
+
+<!--<script type="text/javascript" src="data/timeline_data.json"></script>-->
+<script type="text/javascript" src="data/timeline_data.js">
+</script>
+
+<script id="timeline-template" type="x-template">
+
+    <div class="article--inner">
+
+        <div class="timeline--img"></div>
+
+        <div class="timeline--content">
+            <h3 id="timeline--heading"></h3>
+            <div id="timeline--text"></div>
+        </div>
+
+    </div>
+</script>
+
+<section class="timeline">
+
+    <div class="menu-bar" id="menu-bar">
+        <!--Back and forward arrow icons from https://www.flaticon.com/authors/lyolya-->
+        <div class="navigation-back-button" id="navigation-back-button"><img src="icons/left-arrow.svg"></div>
+        <div class="form-output" id="form-output">
+
+            <form id="year-form" class="year-form">
+                Year: <input type="text" id="year-form-text" title="year-form-text">
+
+                <!--<input type="image" src="search-icon.svg" alt="Search for year">-->
+            </form>
+            <div class="goto-submit-button" id="goto-submit-button"><img src="icons/search-icon.svg"></div>
+            <!--Icons from https://www.flaticon.com/authors/victor-erixon-->
+            <div class="navigation-zoom-in" id="zoom-in-button"><img src="icons/zoom-increasing-button-icon.svg"></div>
+
+
+            <div class="navigation-zoom-out" id="zoom-out-button"><img src="icons/zoom-decreasing-button-icon.svg">
+            </div>
+
+        </div>
+        <div class="navigation-forward-button" id="navigation-forward-button"><img src="icons/right-arrow.svg"></div>
+    </div>
+
+
+    <div class="timeline-slider-output" id="timeline-slider-output">
+        <div class="timeline-slider" id="timeline-slider">
+            <div class="timeline-slider-nav" id="timeline-slider-nav"></div>
+        </div>
+    </div>
+
+    <div class="timeline--article-output" id="article-output"></div>
+
+
+</section>
+
+<script type="text/javascript">
+    const sliderOutput = document.getElementById('timeline-slider-output'),
+        timelineNav = document.getElementById('timeline-slider-nav'),
+        sliderContainer = document.querySelector('.timeline-slider');
+
+    // Number of ticks that are invisible per visible tick.
+    let tickWidth = 10;
+</script>
+
+
+<script type="text/javascript" src="oldDates.js"></script>
+<script type="text/javascript" src="viewManipulation.js"></script>
+
+<script type="text/javascript" src="setup.js"></script>
+<script type="text/javascript" src="model.js"></script>
+<script type="text/javascript" src="data_preprocessing.js"></script>
+
+
+<script>
+    // TODO; add unfold and re-fold buttons to articles if the markers are part of a period
+    // TimelineJS3 calculates all dates and corrosponding event positions in javascript.
+    // That sounds complicated, so let's anchor everything to 1 year div elements
+    // First dateyear to last dateyear
+    // Idea: Zoom can happen through setting different amounts of padding and setting different #ticks to visible
+    const createTimeLine = function CreateTimeLine(beginning, end) {
+
+        for (let i = beginning; i <= end; i++) {
+            let BCEorAD = (i >= 0 ? "AD" : "BCE");
+
+            const minorTick = document.createElement('tick');
+            minorTick.classList.add('minor-tick');
+            // If not a major tick
+            if ((i - beginning) % tickWidth !== 0) {
+                minorTick.style.visibility = 'hidden';
+            }
+
+            minorTick.id = i;
+            minorTick.innerHTML = "<div>" + i + "<br>" + BCEorAD + "</div>";
+            timelineNav.appendChild(minorTick)
+        }
+    };
+
+    let collapsePeriod = function (period) {
+        console.assert(period instanceof Period, "collapsePeriod being called with not a period.");
+        let periodMarkerLine = document.getElementById(period.title + " marker-line");
+        periodMarkerLine.style.display = "flex";
+        period.subEvents.forEach(function (subEvent) {
+            let markerLine = document.getElementById(subEvent.title + " marker-line");
+            markerLine.style.display = "none";
+        });
+    };
+
+
+    let expandPeriod = function (period) {
+        console.assert(period instanceof Period, "collapsePeriod being called with not a periods markertextcontainer.");
+        let periodMarkerLine = document.getElementById(period.title + " marker-line");
+        periodMarkerLine.style.display = "none";
+
+        let colour = periodMarkerLine.firstChild.style.backgroundColor;
+
+        period.subEvents.forEach(function (subEvent) {
+            let markerLine = document.getElementById(subEvent.title + " marker-line");
+            markerLine.style.display = "flex";
+            // Set colour of all submarkers, unless they already have a background
+            if (markerLine.firstChild.style.backgroundColor === "" && markerLine.firstChild.style.backgroundImage === "") {
+                markerLine.firstChild.style.backgroundColor = colour;
+            }
+
+
+        });
+        layoutMarkers();
+
+    };
+
+    let showSelectedArticle = function (selectedId) {
+        // hide existing article
+        let previouslyActive = document.getElementById('article-output').querySelector('.active'),
+            articleOuter = document.getElementById('article--outer');
+
+        if (!!previouslyActive) {
+            previouslyActive.classList.remove('active');
+        }
+
+        // slide to new article
+        let newActive = document.getElementById('article-' + selectedId);
+
+        articleOuter.style.transform = 'translate3d(' + -newActive.offsetLeft + 'px,0,0)';
+
+        newActive.classList.add('active');
+    };
+
+    // TODO; add in support for re-layouting a subsection of the timeline
+    //      Could do this by giving start-year and end-year, then observing the situation 1 max length of any marker
+    //      Using that to learn laneCountDown state, then reflow past that. -Though, now do we do it always correctly at the end?
+    let layoutMarkers = function (targetMaxLanes = 13) {
+        //How many ticks do we have to go past before we can place another marker.
+        const sizes = findDistanceTicks();
+        layoutMarkers.checkLayoutMarkers(sizes);
+        const children = timelineNav.children;
+
+
+        // Every marker gets placed at the lowest height it can be placed. If that is occupied,
+        // either by a marker in the current tick, or some ticks before that would cause overlap
+        // Then we move it up one 'lane', or the height of one marker (+ some whitespace)
+        const laneCountdown = [0];
+
+
+        let markerLineStyleSheet = findStyleSheet('.timeline-markerTextContainer');
+        let defaultWidth = parseInt(markerLineStyleSheet.style.maxWidth.replace("px", ""));
+
+        for (let i = 0; i < children.length - 1; i++) {
+            let maxLanes = 0;
+            for (let j = -3; j < 5; j++) {
+                // Check that marker exists
+                if (children[i + j] == null) {
+                    continue;
+                }
+                if (maxLanes < children[i + j].highestOccupiedLane) {
+                    maxLanes = children[i + j].highestOccupiedLane;
+                }
+            }
+
+            let reduceWidthFactor = layoutMarkers.maxWidthSmoothing(maxLanes, targetMaxLanes);
+
+            //A marker to assign
+            if (children[i].childNodes.length > 1) {
+                //for all markers
+                for (let j = 1; j <= children[i].childNodes.length - 1; j++) {
+                    let connectTickBox = children[i].childNodes[j];
+                    connectTickBox = document.getElementById(connectTickBox.id);
+                    const marker = document.getElementById(connectTickBox.childNodes[0].id);
+
+                    // Is it a period?
+                    // At most ~150ms performance impact
+                    const period = isPeriod(connectTickBox);
+                    if (!period && maxLanes > targetMaxLanes) {
+                        marker.style.maxWidth = (defaultWidth * reduceWidthFactor) + "px";
+                    }
+
+                    // TODO: How do you get the offsetWidth, without looking at the element?
+                    // TODO: precache?
+                    let markerWidth = marker.offsetWidth;
+                    const markerToTickRatio = markerWidth / sizes.get('widthTick');
+
+                    //Find first laneCountdown that has a 0
+                    let position = laneCountdown.findIndex(function (number) {
+                        return number <= connectTickBox.yearoffset;
+                    });
+
+                    // Fitting measure 2: If we need more lanes than we want to have,
+                    //  just fit the marker in the lane it will least overlap.
+                    if (position === -1 && laneCountdown.length > (targetMaxLanes - 1)) {
+                        position = laneCountdown.indexOf(Math.min.apply(null, laneCountdown));
+                    }
+
+                    //if not found
+                    if (position === -1) {
+                        laneCountdown.push(connectTickBox.yearoffset + markerToTickRatio);
+                        const laneNumber = laneCountdown.length;
+                        // *1.2 creates a small amount of whitespace between markers.
+                        const lanesDistance = (laneNumber - 1) * sizes.get('markerTextContainerHeight') * 1.2;
+                        const totalDistance = "calc(" + lanesDistance + "px + 100%)";
+                        const minusTotalDistance = "calc(-" + lanesDistance + "px - 85%)";
+                        // Updating height for every tick seperately costs 5900 seconds.
+                        window.requestAnimationFrame(function(){
+                            connectTickBox.style.height = totalDistance;
+                            connectTickBox.style.top = minusTotalDistance;
+                        });
+
+
+                    } else {
+                        const lanesDistance = position * sizes.get('markerTextContainerHeight') * 1.2;
+                        // 100% is for height of navbar. 85% makes tick line not sit inside navbar
+                        window.requestAnimationFrame(function(){
+                            connectTickBox.style.height = "calc(" + lanesDistance + "px + 100%)";
+                            connectTickBox.style.top = "calc(-" + lanesDistance + "px - 85%)";
+                        });
+                        laneCountdown[position] = markerToTickRatio + connectTickBox.yearoffset;
+                    }
+                }
+            }
+            // No labels to push in
+            // Decrease laneCountdowns
+            laneCountdown.forEach(function (value, index, array) {
+                array[index] = (value > 1 ? value - 1 : 0);
+            });
+
+        }
+        const paddingHeight = 0.15 * sliderOutput.offsetHeight;
+
+        const MaxMarkerHeight = sizes.get('heightMarkerLine') + (laneCountdown.length * sizes.get('markerTextContainerHeight') * 1.2);
+        const sliderHeightAdded = Math.floor((paddingHeight + MaxMarkerHeight));
+        sliderOutput.style.height = "calc(" + sliderHeightAdded + "px + 10vh)";
+    };
+
+    // Don't change actual layout yet, just calculate what the lanes would look like with default width
+    layoutMarkers.checkLayoutMarkers = function (sizes) {
+        const children = timelineNav.children;
+
+        const laneCountdown = [0];
+
+        for (let i = 0; i < children.length - 1; i++) {
+
+            if (children[i].childNodes.length > 1) {
+                for (let j = 1; j <= children[i].childNodes.length - 1; j++) {
+                    let markerLine = children[i].childNodes[j];
+                    markerLine = document.getElementById(markerLine.id);
+                    const marker = document.getElementById(markerLine.childNodes[0].id);
+                    const markerToTickRatio = marker.offsetWidth / sizes.get('widthTick');
+
+                    //Find first laneCountdown that has a 0
+                    let position = laneCountdown.findIndex(function (number) {
+                        return number <= markerLine.yearoffset;
+                    });
+
+                    //if not found
+                    if (position === -1) {
+                        laneCountdown.push(markerLine.yearoffset + markerToTickRatio);
+                    } else {
+                        laneCountdown[position] = markerToTickRatio + markerLine.yearoffset;
+                    }
+                }
+            }
+
+            children[i].highestOccupiedLane = 0;
+            laneCountdown.forEach(function (value, index) {
+                if (value > 0) {
+                    children[i].highestOccupiedLane = index;
+                }
+            });
+
+            // Decrease laneCountdowns
+            laneCountdown.forEach(function (value, index, array) {
+                array[index] = (value > 1 ? value - 1 : 0);
+            });
+        }
+    };
+
+    layoutMarkers.maxWidthSmoothing = function (maxRows, targetMaxRows) {
+        let excess = maxRows - targetMaxRows;
+        let factor = 1 - (excess * 0.07);
+        factor = factor < 0.3 ? 0.3 : factor;
+        factor = factor > 1 ? 1 : factor;
+        return factor;
+    };
+
+    let isPeriod = function (connectTickBox) {
+        return connectTickBox.childNodes[1].classList.contains('timeline-marker-line-both');
+    };
+
+    let isExpandablePeriod = function (connectTickBox) {
+        let name = connectTickBox.children[0].id;
+        return periods.has(name);
+    };
+
+
+
+
+    // this function causes a layout recalculation, which takes up like 1/2 of the loading time
+    //  checkLayoutMarkers also uses offsetWidth, which causes recalculating of style
+    function findDistanceTicks() {
+        const children = timelineNav.children;
+        let measurementMap = new Map();
+
+        // Find a child
+        for (let i = 0; i < children.length; i++) {
+            if (children[i].childNodes.length > 1) {
+                // Ugly way of getting the element
+                measurementMap.set('widthTick', document.getElementById(children[i].id).offsetWidth);
+                // Find height of a marker.
+                let markerLine = children[i].lastChild;
+                assert(markerLine.localName === 'connecttickbox', "layoutMarkers selected wrong child of tick.");
+                let marker = markerLine.firstChild;
+                marker = document.getElementById(marker.id);
+                measurementMap.set('markerTextContainerHeight', marker.offsetHeight);
+                markerLine = document.getElementById(markerLine.id);
+                measurementMap.set('heightMarkerLine', markerLine.offsetHeight);
+                measurementMap.set('heightMarker', (marker.offsetHeight / 2) + 5);
+                // measurementMap.set('widthMarker', marker.offsetWidth);
+
+                break;
+            }
+        }
+        measurementMap.set('navbarHeight', timelineNav.scrollHeight);
+
+        //How many ticks do we have to go past before we can place another marker.
+        return measurementMap;
+    }
+
+    let findAdjacentMarker = function (markerTextContainer, forward) {
+        let connecttickbox = markerTextContainer.parentElement;
+        let next = findAdjacentMarker.adjacentConnectTickboxSibling(connecttickbox, forward, false);
+        let tick = connecttickbox.parentElement;
+
+
+        // Iterate over ticks
+        while (next == null) {
+            if (forward) {
+                tick = tick.nextSibling;
+            } else {
+                tick = tick.previousSibling;
+            }
+            // Had all ticks, return container we started with.
+            if (tick == null) {
+                return markerTextContainer;
+            }
+
+
+            next = findAdjacentMarker.findConnecttickboxinTick(tick, forward);
+        }
+
+        return next.children[0];
+    };
+
+    // Return null if none found
+    findAdjacentMarker.adjacentConnectTickboxSibling = function (node, forward) {
+        let i = 0;
+        while (i < 100) {
+            node = forward ? node.nextSibling: node.previousSibling;
+
+            if (node == null) {
+                return null;
+            }
+            else if (node.nodeName === 'CONNECTTICKBOX' && node.style.display !== 'none') {
+                return node;
+            }
+            i += 1;
+        }
+    };
+
+    findAdjacentMarker.findConnecttickboxinTick = function(tick, forward){
+        // Expects first node is always a div with text
+        let childs = Array.from(tick.children);
+        if (!forward){
+            childs = childs.reverse();
+        }
+        let index = childs.findIndex(function(node){
+            return node.nodeName === 'CONNECTTICKBOX' && node.style.display !== 'none';
+        });
+
+        if (!forward){
+            index = (childs.length-1) - index;
+        }
+
+        if (index === -1){
+            return null;
+        } else{
+            return tick.children[index];
+        }
+    };
+
+
+    function findFirstLast() {
+        let first = modelEvents[0].start_date.year;
+        let last = modelEvents[modelEvents.length-1].start_date.year;
+        // Single pass through all elements in data
+        modelEvents.forEach(function (event) {
+            if(event.end_date !== null){
+                if(event.end_date.year > last){
+                    last = event.end_date.year;
+                }
+            }
+        });
+        return [first, last];
+    }
+
+    function zoom(factor) {
+        // Find current tick closest to middle
+        // tickWidth = tickWidth * factor;
+
+        let rootStyleSheet = findStyleSheet(':root');
+        let currentFontSize = rootStyleSheet.style.getPropertyValue("--tick-width");
+        currentFontSize = parseFloat(currentFontSize.replace("vw", ''));
+        currentFontSize = currentFontSize * factor;
+        rootStyleSheet.style.setProperty('--tick-width', currentFontSize + "vw");
+
+        // Arbitrarily chosen breakpoints to add in fewer/more visible ticks.
+        let tickWidth = 10;
+        if (currentFontSize > 5) {
+            tickWidth = 5;
+        }
+        if (currentFontSize > 8) {
+            tickWidth = 2;
+        }
+        if (currentFontSize > 12) {
+            tickWidth = 1;
+        }
+        if (currentFontSize < 1.1) {
+            tickWidth = 20;
+        }
+
+        // Maybe keep same decade markers (or whichever era is ~5% of timespan) visible,
+        // But then slowly take out/add some of those. Like always keep 2000 visible, just not 1990 at higher zoom lev
+        const children = timelineNav.children;
+
+        Array.from(children).forEach(function (tick) {
+            let year = parseInt(tick.id);
+            if (year % tickWidth !== 0) {
+                tick.style.visibility = 'hidden';
+            } else {
+                tick.style.visibility = 'visible';
+            }
+        });
+
+        timelineDragger.updateBounds();
+        layoutMarkers();
+        timelineDragger.ftlDrive(sliderOutput.querySelector('.active'));
+    }
+
+    let findStyleSheet = function (name) {
+        //TODO: am I only catching the exception. Does this fix an actual problem? or just always error
+        let stylesheets = document.styleSheets[0];
+        console.log(stylesheets);
+        try {
+            let sheets = document.styleSheets[0].rules;
+
+            console.log(sheets);
+            for (let i = 0; i < sheets.length - 1; i++) {
+                if (sheets[i].selectorText === name) {
+                    return sheets[i];
+                }
+            }
+        } catch(e){
+            if(e.name !== 'SecurityError')
+                throw e;
+            return;
+        }
+        return undefined;
+    };
+
+    // Derive what tick year is being displayed on the left side
+    // Look at how many pixels have passed from leftmost section.
+    //  Then calc how many pixels per tick, then divide one by the other to see elapsed # of ticks.
+    function currentTick(){
+        let current_tick = -1000000;
+        // let end_tick = -100000;
+        const transformvalue = sliderContainer.style.getPropertyValue('transform');
+        // Value of the transform in pixels, stripping negative.
+        let px_value = transformvalue.slice(12, -3);
+        assert(!isNaN(px_value), "px value derived for slidercontainer transform in currentTick method is not a number");
+
+        px_value = px_value - 20; // Compensation for start of timeline-nav, seems always around 20px
+        let earliest_tick = findFirstLast()[0];
+        const width = window.innerWidth / 100;
+        // The padding of the nav-bar substracted
+        px_value = px_value - (10*width);
+        // Tick size in visualwidth
+        let tick_size = findStyleSheet(':root').style.getPropertyValue("--tick-width").slice(0,-2);
+        tick_size = tick_size * width; // now in px
+        if (px_value > 0) {
+
+            // How many ticks since start
+            const ticks = px_value / tick_size;
+            current_tick = Math.round(earliest_tick + ticks);
+            // end_tick = Math.round(current_tick + (width*100 / tick_size));
+        } else {
+            current_tick = earliest_tick;
+
+            // Not always correct due to bug where you can drift past left edge. But not far off.
+            // end_tick = Math.round(current_tick + (width*100 / tick_size));
+        }
+
+        return current_tick;
+
+    }
+
+    function tickToOffset(year){
+        let earliest_year = findFirstLast()[0];
+        assert(year >= earliest_year, "Year is before earliest year in timeline")
+
+
+        // Compensation for start of timeline-nav, has 20 pixels+10 viewwidth
+        let pixels = 20+ (window.innerWidth/10);
+
+        const year_difference = year - earliest_year;
+
+        // Tick size in visualwidth
+        let tick_size = findStyleSheet(':root').style.getPropertyValue("--tick-width").slice(0,-2);
+        tick_size = tick_size * (window.innerWidth/100);
+        pixels += tick_size * year_difference;
+
+        return pixels;
+    }
+
+
+    function longEventsInView(){
+        let current_tick = currentTick();
+        let EndingEvents = document.getElementsByClassName('timeline-marker-line-both');
+        let EndEventsWithYear = [];
+        // Since both event array and array of eventswithenddate are sorted by date, could do faster matching
+        //  by matching all in a single run, and not starting anew every time one is found
+        for(let event of EndingEvents){
+            const event_name = event.parentNode.innerText;
+            let event_data = modelEvents.find(function(event
+            ){
+                return event.title === event_name;
+            });
+            EndEventsWithYear.push([event, event_data.end_date.year]);
+        }
+        let longMarkersInView = [];
+        // console.log(EndEventsWithYear);
+        for(let tuple of EndEventsWithYear){
+            const start_year = tuple[0].parentNode.parentNode.id;
+            const end_year = tuple[1];
+            if( start_year < current_tick && end_year > current_tick){
+                longMarkersInView.push(tuple[0]);
+                // console.log(tuple[0].parentNode.innerText)
+            }
+        }
+
+        for(let event of longMarkersInView){
+            console.log(event.parentNode.children[0].children[0]);
+            let text = event.parentNode.children[0].children[0];
+            text.style.marginLeft = '100px';
+        }
+
+        // return longMarkersInView;
+    }
+
+    if (timelineData) {
+        let firstLast = findFirstLast(timelineData);
+        createTimeLine(firstLast[0], firstLast[1]);
+        // createTimeLine(980, 2010);
+        modelToView();
+        periods.forEach(function (period) {
+            collapsePeriod(period);
+        });
+        layoutMarkers();
+        timelineDragger();
+        timelineDragger.focusMiddleEvent();
+    }
+
+    function assert(condition, message) {
+        if (!condition) {
+            throw message || "Assertion failed";
+        }
+    }
+
+
+</script>
+
+</body>
+</html>

@@ -1,0 +1,9 @@
+Features to be added:
+We have some really long ass events that just roll through centuries, such as dynasties. Need a better way to display that these are still active, but not take up so much space.
+
+the javascript array of events that gets processed simulates/emulates a database.
+Really, all the data about events should be in a database, and one that is persistent.
+
+Might want to allow background images for the articles.
+
+BUG: Months are somehow not supported in the conversion script.
